@@ -1,10 +1,8 @@
 <script lang="ts">
-    import type { Monster } from "@types";
+    import type { Monster } from "index";
     import { Notice } from "obsidian";
-    import type { PropertyItem } from "src/layouts/types";
-    import type StatBlockPlugin from "src/main";
-    import { getContext } from "svelte";
-    import { stringify } from "src/util/util";
+    import type { PropertyItem } from "types/layout";
+    import { slugify, stringify } from "src/util/util";
     import TextContentHolder from "./TextContentHolder.svelte";
 
     export let monster: Monster;
@@ -32,10 +30,12 @@
     if (!item.conditioned && !`${property}`.length) {
         property = item.fallback ?? "-";
     }
+
+    $: cssClass = item.doNotAddClass ? "" : slugify(item.properties[0]);
 </script>
 
 {#if !item.conditioned || (item.conditioned && `${property}`.length)}
-    <div class="line">
+    <div class="line {cssClass}">
         <span class="property-name">{display}</span>
         <TextContentHolder render={item.markdown} {property} />
     </div>
@@ -43,14 +43,15 @@
 
 <style>
     .line {
-        line-height: 1.4;
+        line-height: var(--active--property-line-height);
         display: block;
-        color: var(--statblock-primary-color);
+        color: var(--active--property-font-color);
     }
     .property-name {
         margin: 0;
         margin-right: 0.25em;
         display: inline;
-        font-weight: bold;
+        color: var(--active--property-name-font-color);
+        font-weight: var(--active--property-name-font-weight);
     }
 </style>

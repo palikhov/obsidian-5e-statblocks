@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { Monster } from "@types";
-    import type { SubHeadingItem } from "src/layouts/types";
+    import type { Monster } from "index";
+    import type { SubHeadingItem } from "types/layout";
     import { stringify } from "src/util/util";
     import TextContent from "./TextContent.svelte";
 
@@ -17,17 +17,15 @@
 
 {#if subheading.length}
     <div class="subheading">
-        <TextContent
-            textToRender={subheading.join(item.separator ?? " ")}
-        />
+        <TextContent textToRender={subheading.join(item.separator)} />
     </div>
 {/if}
 
 <style>
     .subheading {
-        font-weight: normal;
-        font-style: italic;
-        font-size: 12px;
+        font-weight: var(--active--subheading-font-weight);
+        font-style: var(--active--subheading-font-style);
+        font-size: var(--active--subheading-font-size);
         margin: 0;
     }
 </style>

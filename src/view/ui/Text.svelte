@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { Monster } from "@types";
-    import type { TextItem } from "src/layouts/types";
+    import type { Monster } from "types";
+    import type { TextItem } from "types/layout";
     import { stringify } from "src/util/util";
 
     import SectionHeading from "./SectionHeading.svelte";
@@ -21,7 +21,7 @@
 
 {#if !item.conditioned || (item.conditioned && `${property}`.length)}
     {#if item.heading}
-        <SectionHeading header={item.heading} />
+        <SectionHeading {item} {monster} />
     {/if}
     <div class="line">
         <TextContentHolder render={item.markdown} {property} />

@@ -1,18 +1,20 @@
-# Obsidian TTRPG Statblocks
+# Fantasy Statblocks
 
-Create, manage, and view a TTRPG Bestiary in Obsidian.md.
+
+> Warning: We are beginning a Readme transition to [Javalent's Plugins Documentation](https://plugins.javalent.com/home) in all Javalent repositories. Please bookmark this link and check it first before referring to this readme.
+>
+> Legal attributions for various layouts can be found at the documentation site, at the bottom of this readme, and in the licenses folder.
+
+
+Create, manage and view a Fantasy Bestiary in [Obsidian](https://obsidian.md/).
 
 <img src="https://raw.githubusercontent.com/valentine195/obsidian-5e-statblocks/beta/images/example.PNG">
-
-> **:pencil: Homebrew**
->
-> The plugin is used to manage
 
 # Usage
 
 A statblock may be defined in a note using the syntax below.
 
-All fields are optional - if not provided, that Statblock will simply not render them.
+All fields are optional—if not provided, that Statblock will simply not render them.
 
 The `monster` field may be combined with other fields to override the field. See [Overriding Fields](#Overriding-Fields).
 
@@ -125,6 +127,44 @@ name: Paarthurnax
 
 <img src="https://raw.githubusercontent.com/valentine195/obsidian-5e-statblocks/beta/images/override.PNG">
 
+## Adding to Fields
+
+Any field that is a plain string or an array can be added to, by specifying the name of the field followed by a `+`. For example:
+
+````
+```statblock
+monster: Ancient Black Dragon
+name: Paarthurnax
+traits+:
+  - name: Appended Trait
+    desc: This trait will be appended to the existing traits list, instead of overwriting all of them.
+```
+````
+
+## Extending
+
+The `extends` key can be used to extend** an existing creature, similar to the `monster` key shown in Overriding Fields. The difference is the resulting monster is not combined; it maintains a link to the base creature. This allows you to, for example, create a named version of a Goblin; any changes to the base Goblin will propagate to the extension.
+
+This key supports a single creature name or an array of creatures. Fields from creatures specified later will take precedence, with any fields directly defined in the statblock taking final precedence.
+
+This field is also fully recursive; extending a creature that extends another creature will cascade these extensions all the way through.
+
+````
+```statblock
+name: Paarthurnax
+extends: Ancient Black Dragon
+```
+````
+
+````
+```statblock
+name: Extended Paarthurnax
+extends:
+- Paarthurnax
+- Goblin
+```
+````
+
 ## Traits
 
 Traits, as well as Actions, Reactions and Legendary Actions, should be added by specifying a name and description (desc):
@@ -167,7 +207,7 @@ spells:
 
 Those of you using the plugin for Fantasy AGE may use `fage_stats` to set the nine stats.
 
-## Full Example
+### Full Example
 
 ````
 ```statblock
@@ -246,12 +286,12 @@ spells:
 
 For Fate Core, the same layout can be used for anything - entities, factions, locations, items, etc., with only the name and aspects being necessary for all of them. To add (or change) custom stress tracks, make a copy of the layout and edit the `stress` block.
 
-## Full Example
+### Full Example
 
 ````
 ```statblock
 layout: Basic Fate Core Layout
-image: [[bear.png]]
+image: "[[bear.png]]"
 name: Barathar
 description: an awkward sunbear
 aspects: "
@@ -266,40 +306,96 @@ temporaryAspects: "
 stress: [4, 5]
 consequences:
   - name: Mild (2)
-    desc: Formerly fractured bone is still healing
+    desc: "Formerly fractured bone is still healing"
   - name: Moderate (4)
-    desc: -
+    desc: ""
   - name: Severe (6)
-    desc: -
+    desc: ""
 skills:
   - name: Fantastic (+6)
-    desc: Deceive, Fight
+    desc: "Deceive, Fight"
   - name: Superb (+5)
-    desc: Shoot, Burglary
+    desc: "Shoot, Burglary"
   - name: Great (+4)
-    desc: Resources, Will
+    desc: "Resources, Will"
   - name: Good (+3)
-    desc: Contacts, Notice
+    desc: "Contacts, Notice"
   - name: Fair (+2)
-    desc: Crafts, Stealth
+    desc: "Crafts, Stealth"
   - name: Average (+1)
-    desc: Lore, Physique
+    desc: "Lore, Physique"
 stunts:
   - name: Takes One to Know One (Deceive)
-    desc: Use Deceive instead of Empathy to create an advantage in social situations.
+    desc: "Use Deceive instead of Empathy to create an advantage in social situations."
   - name: Feint Master (Deceive)
-    desc: +2 to use Deceive to create an advantage in a physical conflict.
+    desc: "+2 to use Deceive to create an advantage in a physical conflict."
   - name: Riposte (Fight)
-    desc: If you succeed with style on a Fight defense, you can choose to inflict a 2-shift hit rather than take a boost.
+    desc: "If you succeed with style on a Fight defense, you can choose to inflict a 2-shift hit rather than take a boost."
 items:
   - name: sword +1
-    desc: -
+    desc: ""
   - name: leather armor +1
-    desc: a scuffed [[leather armor]] with red linen undershirt
+    desc: "a scuffed [[leather armor]] with red linen undershirt"
 ```
 ````
 
 <img src="https://i.imgur.com/9u308Z9.png">
+
+## 13th Age
+
+You can create a statblock for a **13th Age** using the `Basic 13th Age Monster Layout`. Most of the blocks are conditional, meaning that _Traits_, _Nastier Specials_ and _Triggered Actions_ blocks will not show unless added to the YAML. In addition, you can write nested traits for attacks/actions to describe effects on the various natural rolls.
+
+See a full statblock with empty fields [here](./src/layouts/13th%20age/monster/base-monster-statblock.md)
+
+### Full Example
+
+````
+```statblock
+name: Chimera
+image: [[chimera-tile.png]]
+flavor_text: "In illustrated bestiaries copied down through the ages, the three bodies of the chimera are merged neatly: lion, dragon, and goat. In reality, scales and hair, and hooves and claws all mingle in a chaotic form. No two chimeras are exactly alike, and most include modest portions of other beasts, as well as the standard three. Their distorted forms bring them pain. They take it out on everything else."
+size: large
+level: 9th
+role: wrecker
+type: beast
+initiative: 15
+vulnerability: none
+ac: 24
+pd: 20
+md: 16
+hp: 320
+actions:
+    - name: Fangs, claws, and horns +14 vs. AC (3 attacks)
+      desc: 25 damage
+      traits:
+          - name: natural 14–15
+            desc: The target is dazed until the end of the chimera’s next turn from a headbutt.
+          - name: natural 16–17
+            desc: The target takes 20 ongoing damage from raking claws.
+          - name: natural 18–20
+            desc: The chimera makes a _Fiery Breath_ attack as a free action.
+          - name: limited use
+            desc: 3/battle
+triggered_actions:
+    - name: Fiery breath +14 vs. PD (up to 3 nearby enemies in a group)
+      desc: 3d10 fire damage
+traits:
+    - name: Bestial thresher
+      desc: "Whenever a creature misses the chimera with a melee attack, the chimera’s multiple sharp bits deal 3d10 damage to that attacker."
+nastier_traits:
+    - name: Now it’s angry!
+      desc: When an attacker scores a critical hit against the chimera and it survives, its attack rolls on its next turn deal the effects of the lower rolls as well as their own results; for example, a roll of 18–20 would daze the target and deal 20 ongoing damage as well as triggering fiery breath.
+description: "<h2>Icons</h2><p>It is said that wizards trained by the original Wizard King treated the creation of their own unique chimera as a rite of passage. As a defender of the Empire, the Archmage obviously scorns such misguided uses of power. Of course, individual wizards acting on their own initiative might set out to prove that chimeras created according to the formulas of the Archmage are superior. Ahem.</p><p>In the present age, the iron-fisted forces of the Crusader and the Orc Lord feel no shame in indulging the chimera’s requirements for slaughter and torture.<p>"
+```
+````
+
+#### One Column
+
+![13th Age Chimera 1-col](src/layouts/13th%20age/monster/publish/chimera-1-col.png)
+
+#### Two Columns
+
+![13th Age Chimera 2-cols](src/layouts/13th%20age/monster/publish/chimera-2-cols.png)
 
 ## Columns
 
@@ -332,29 +428,42 @@ You can add your own custom monsters to this bestiary in a few ways.
 
 ### Creating Creatures in Notes
 
-Homebrew creatures can be saved by creating a custom monster in a statblock codeblock in a note, as described in [the usage section](#usage).
+#### Manually Saving a Creature
+Homebrew creatures can be saved by creating a custom monster in a statblock codeblock 
+in a note, as described in [the usage section](#usage).
 
-You can either fully define your own custom monster, or use an existing monster in your bestiary and [override fields](#overriding-fields).
+You can either fully define your own custom monster, or use an existing monster in 
+your bestiary and [override fields](#overriding-fields).
 
-When a statblock has been rendered, you may save the creature by clicking the menu icon in the top right and selecting "Save to Bestiary".
+When a statblock has been rendered, you may save the creature by clicking the menu 
+icon in the top right and selecting "Save to Bestiary".
 
 <img src="https://raw.githubusercontent.com/valentine195/obsidian-5e-statblocks/beta/images/save.png">
 
-### Creating Creatures in Frontmatter
+#### Creating Creatures in Frontmatter
+Because the plugin uses YAML for its syntax, a statblock created using the statblock codeblock is valid note 
+frontmatter.
 
-Because the plugin uses YAML for its syntax, a statblock created using the statblock codeblock is valid note frontmatter.
-
-Any note given the `statblock: true` parameter in its frontmatter will have its frontmatter parsed for a custom monster if [Parse Frontmatter in Notes](#parse-frontmatter-for-creatures) is turned on in [Settings](#settings) or if the "Parse Frontmatter in Notes" command is used.
-
+Any note given the `statblock: true` parameter in its frontmatter will have its frontmatter parsed 
+for a custom monster if [Parse Frontmatter in Notes](#parse-frontmatter-for-creatures) is turned 
+on in [Settings](#settings) or if the "Parse Frontmatter in Notes" command is used.
+ 
 **The note must also have a `name` parameter in the frontmatter to save the creature. All other fields are optional.**
 
 Once the creature has been found in a note, it will be added to the bestiary and synced with the note content.
 
-If the statblock field is removed or set to false, or the note is deleted, the creature will be removed from the bestiary.
+If the statblock field is removed or set to false, or the note is deleted, the creature will be removed from the 
+bestiary.
+
+#### Automating Inline Creature registration
+If the frontmatter specifies `statblock: inline` and [Parse Frontmatter in Notes](#parse-frontmatter-for-creatures) then
+the first statblock in the note will automatically be registered in the pblugin, the same as if you had copied it's YAML 
+into the frontmatter.
 
 ### Creating Creatures in Settings
 
-Creatures can be created directly in settings under the [Homebrew Creatures](#homebrew-creatures) section by clicking the "Add Creature" button.
+Creatures can be created directly in settings under the [Homebrew Creatures](#homebrew-creatures) section by clicking 
+the "Add Creature" button.
 
 Creatures can be created using either the YAML syntax shown above or by JSON.
 
@@ -368,7 +477,10 @@ Additionally, creatures can be imported as straight JSON.
 
 ## Accessing the Bestiary
 
-Your bestiary lives on the plugin and can be accessed programmatically in plugins that can run JavaScript, such as [Dataview](https://github.com/blacksmithgu/obsidian-dataview), [Templater](https://github.com/SilentVoid13/Templater) or [CustomJS](https://github.com/samlewis0602/obsidian-custom-js).
+Your bestiary lives on the plugin and can be accessed programmatically in plugins that can run JavaScript, 
+such as [Dataview](https://github.com/blacksmithgu/obsidian-dataview), 
+[Templater](https://github.com/SilentVoid13/Templater) or 
+[CustomJS](https://github.com/samlewis0602/obsidian-custom-js).
 
 A readonly copy of the bestiary is available on the `window` object and can be accessed in your scripts like this:
 
@@ -429,7 +541,7 @@ These can be overridden globally (on the `:root` element) to change the default 
 
 # Layouts
 
-As of TTRPG Statblocks v2.0.0, custom layouts may be created in settings. The basic 5e layout will always exist, but the default layout used by the plugin may be changed.
+As of Fantasy Statblocks v2.0.0, custom layouts may be created in settings. The basic 5e layout will always exist, but the default layout used by the plugin may be changed.
 
 ## Using a Layout
 
@@ -688,8 +800,26 @@ Please ensure you have automated backups.
 
 If you're using Obsidian to run/plan a TTRPG, you may find my other plugin useful:
 
--   [Obsidian Leaflet](https://github.com/valentine195/obsidian-leaflet-plugin) - Add interactive maps to Obsidian.md notes
--   [Dice Roller](https://github.com/valentine195/obsidian-dice-roller) - Inline dice rolling for Obsidian.md
--   [Initiative Tracker](https://github.com/valentine195/obsidian-initiative-tracker) - Track TTRPG Initiative in Obsidian
+-   [Obsidian Leaflet](https://github.com/valentine195/obsidian-leaflet-plugin) – Add interactive maps to Obsidian.md notes
+-   [Dice Roller](https://github.com/valentine195/obsidian-dice-roller) – Inline dice rolling for Obsidian.md
+-   [Initiative Tracker](https://github.com/valentine195/obsidian-initiative-tracker) – Track TTRPG Initiative in Obsidian
 
 <a href="https://www.buymeacoffee.com/valentine195"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=valentine195&button_colour=e3e7ef&font_colour=262626&font_family=Inter&outline_colour=262626&coffee_colour=ff0000"></a>
+
+## Attributions
+
+### DnD 5e License Disclosure
+Fantasy Statblocks uses trademarks and/or copyrights owned by Wizards of the Coast, LLC., which are used under the Open Game License v 1.0a Copyright 2000. 
+Fantasy Statblocks is not published, endorsed or specifically approved by Wizards of the Coast, LLC.
+A full copyright notice can be found in [our licenses folder](licenses/dnd-5e-ogl.md).
+
+### 13th Age Community License Disclosure
+Fantasy Statblocks uses trademarks and/or copyrights owned by Fire Opal Media Inc., which are used under the Fire Opal Media Inc., 13th Age Community Use Policy. 
+We are expressly prohibited from charging you to use or access this content. 
+Fantasy Statblocks is not published, endorsed or specifically approved by Fire Opal Media.
+
+### PF2E Community Use Disclosure
+Fantasy Statblocks uses trademarks and/or copyrights owned by Paizo Inc., used under Paizo's Community Use Policy (paizo.com/communityuse).
+We are expressly prohibited from charging you to use or access this content. 
+Fantasy Statblocks is not published, endorsed, or specifically approved by Paizo. 
+For more information about Paizo Inc. and Paizo products, visit paizo.com.

@@ -9,7 +9,9 @@ import Worker, {
     UpdateEventMessage,
     SaveMessage,
     FinishFileMessage,
-    DebugMessage
+    DebugMessage,
+    ReadMessage,
+    ContentMessage
 } from "./watcher.worker";
 
 declare global {
@@ -54,7 +56,7 @@ export class Watcher extends Component {
                     return;
                 }
                 if (this.plugin.settings.debug)
-                    console.debug(`TTRPG: Reparsing ${file.name}`);
+                    console.debug(`Fantasy Statblocks: Reparsing ${file.name}`);
                 this.parsePath(file);
             })
         );
@@ -70,7 +72,7 @@ export class Watcher extends Component {
 
                 if (this.plugin.settings.debug)
                     console.debug(
-                        `TTRPG: Handling rename of ${oldPath} to ${abstractFile.path}`
+                        `Fantasy Statblocks: Handling rename of ${oldPath} to ${abstractFile.path}`
                     );
                 await this.delete(oldPath);
                 this.parsePath(abstractFile);
@@ -111,23 +113,36 @@ export class Watcher extends Component {
             "message",
             async (evt: MessageEvent<UpdateEventMessage>) => {
                 if (evt.data.type == "update") {
-                    const { monster, path } = evt.data;
+                    let { monster, path } = evt.data;
                     let update = false;
                     if (this.watchPaths.has(path)) {
                         const existing = this.watchPaths.get(path);
-                        this.plugin.deleteMonster(existing);
+                        await this.plugin.deleteMonster(existing);
                         update = true;
                         if (this.plugin.settings.debug)
-                            console.debug(`TTRPG: Updating ${monster.name}`);
+                            console.debug(
+                                `Fantasy Statblocks: Updating ${monster.name}`
+                            );
                     }
+
+                    if (
+                        "monster" in monster &&
+                        this.plugin.bestiary.has(monster.monster)
+                    ) {
+                        monster = {
+                            ...this.plugin.bestiary.get(monster.monster),
+                            ...monster
+                        };
+                    }
+
                     this.watchPaths.set(path, monster.name);
-                    this.plugin.saveMonster(monster, false, false);
+                    await this.plugin.saveMonster(monster, false, false);
 
                     if (this.plugin.settings.debug)
                         console.debug(
-                            `TTRPG: ${update ? "Updated" : "Added"} ${
-                                monster.name
-                            }`
+                            `Fantasy Statblocks: ${
+                                update ? "Updated" : "Added"
+                            } ${monster.name}`
                         );
                 }
             }
@@ -138,22 +153,27 @@ export class Watcher extends Component {
             "message",
             async (evt: MessageEvent<SaveMessage>) => {
                 if (evt.data.type == "save") {
-                    await this.plugin.saveSettings();
-                    if (this.startTime) {
-                        console.info(
-                            `TTRPG Statblocks: Frontmatter Parsing Complete in ${(
-                                (Date.now() - this.startTime) /
-                                1000
-                            ).toLocaleString()} seconds.`
-                        );
-                        this.startTime = 0;
-                    }
-                    if (this.announce) {
-                        new Notice(
-                            "TTRPG Statblocks: Frontmatter Parsing complete."
-                        );
-                        this.announce = false;
-                    }
+                    await this.save();
+                }
+            }
+        );
+        this.worker.addEventListener(
+            "message",
+            async (evt: MessageEvent<ReadMessage>) => {
+                if (evt.data.type == "read") {
+                    const file = this.plugin.app.vault.getAbstractFileByPath(
+                        evt.data.path
+                    );
+                    if (!(file instanceof TFile)) return "";
+                    await this.plugin.app.vault
+                        .read(file)
+                        .then((fileContent) => {
+                            this.worker.postMessage<ContentMessage>({
+                                type: "content",
+                                path: evt.data.path,
+                                content: fileContent
+                            });
+                        });
                 }
             }
         );
@@ -172,20 +192,47 @@ export class Watcher extends Component {
             this.start();
         });
     }
+    async save() {
+        await this.plugin.saveSettings();
+        if (this.startTime) {
+            console.info(
+                `Fantasy Statblocks: Frontmatter Parsing Complete in ${(
+                    (Date.now() - this.startTime) /
+                    1000
+                ).toLocaleString()} seconds.`
+            );
+            this.startTime = 0;
+        }
+        if (this.announce) {
+            new Notice("Fantasy Statblocks: Frontmatter Parsing complete.");
+            this.announce = false;
+        }
+    }
     async delete(path: string) {
         await this.plugin.deleteMonster(this.watchPaths.get(path));
         this.watchPaths.delete(path);
         if (this.plugin.settings.debug)
-            console.debug(`TTRPG: Removing '${path}' from bestiary`);
+            console.debug(
+                `Fantasy Statblocks: Removing '${path}' from bestiary`
+            );
     }
     startTime: number;
     start(announce = false) {
         this.announce = announce;
         this.startTime = Date.now();
-        console.info("TTRPG Statblocks: Starting Frontmatter Parsing.");
+        console.info("Fantasy Statblocks: Starting Frontmatter Parsing.");
+        if (!this.plugin.settings.paths?.length) {
+            this.plugin.settings.paths = ["/"];
+        }
+        let isParsing = false;
         for (const path of this.plugin.settings.paths) {
             const folder = this.vault.getAbstractFileByPath(path);
+            if (!folder) continue;
+            isParsing = true;
             this.parsePath(folder);
+        }
+        if (!isParsing) {
+            this.save();
         }
     }
     pathContainsFile(file: TAbstractFile) {
@@ -196,7 +243,7 @@ export class Watcher extends Component {
             return true;
 
         for (const path of this.plugin.settings.paths) {
-            if (file.path.includes(path)) return true;
+            if (file.path.startsWith(path)) return true;
         }
         return false;
     }
@@ -245,7 +292,7 @@ export class Watcher extends Component {
                 files.push(...this.getFiles(child));
             }
         }
-        if (folder instanceof TFile) {
+        if (folder instanceof TFile && folder.extension === "md") {
             files.push(folder.path);
         }
         return files;
@@ -255,10 +302,7 @@ export class Watcher extends Component {
             this.plugin.deleteMonster(monster, false, false);
         }
 
-        for (const path of this.plugin.settings.paths) {
-            const folder = this.vault.getAbstractFileByPath(path);
-            this.parsePath(folder);
-        }
+        this.start(false);
     }
     onunload() {
         this.worker.terminate();

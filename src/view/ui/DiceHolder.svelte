@@ -1,30 +1,45 @@
 <script lang="ts">
-    import type { Monster } from "@types";
+    import type { Monster } from "index";
     import { Notice } from "obsidian";
-    import type { StatblockItem } from "src/layouts/types";
-    import type StatBlockPlugin from "src/main";
+    import type { BasicItem, Layout } from "types/layout";
 
     import { getContext } from "svelte";
 
     import DiceRoll from "./DiceRoll.svelte";
     import TextContent from "./TextContent.svelte";
+    import { parseForDice } from "src/util/dice-parsing";
+    import type StatBlockPlugin from "src/main";
+
     export let property: string;
 
-    let item = getContext<StatblockItem>("item");
+    let item = getContext<BasicItem>("item");
 
     let dice = getContext<boolean>("dice") && item.dice;
     let monster = getContext<Monster>("monster");
+    let layout = getContext<Layout>("layout");
     let plugin = getContext<StatBlockPlugin>("plugin");
 
     let split: Array<{ text: string; original?: string } | string> = [property];
-    if (dice) {
-        if (
-            item.diceProperty &&
-            item.diceProperty in monster &&
-            typeof monster[item.diceProperty] == "string"
-        ) {
-            split = [{ text: monster[item.diceProperty] as string }];
-        } else if (item.diceCallback) {
+
+    if (plugin.canUseDiceRoller) {
+        if (dice) {
+            if (
+                item.diceProperty &&
+                item.diceProperty in monster &&
+                typeof monster[item.diceProperty] == "string"
+            ) {
+                split = [{ text: monster[item.diceProperty] as string }];
+            } else {
+                const parsed = parseForDice(layout, property, monster);
+
+                if (Array.isArray(parsed)) {
+                    split = parsed;
+                } else {
+                    split = [parsed];
+                }
+            }
+        }
+        if (item.diceCallback?.length) {
             try {
                 const frame = document.body.createEl("iframe");
                 const funct = (frame.contentWindow as any).Function;
@@ -49,18 +64,11 @@
                 );
                 console.error(e);
             }
-        } else {
-            const parsed = plugin.parseForDice(property);
-            if (Array.isArray(parsed)) {
-                split = parsed;
-            } else {
-                split = [parsed];
-            }
         }
     }
 </script>
 
-{#if !dice}
+{#if !plugin.canUseDiceRoller || (!dice && !item.diceCallback?.length)}
     <span class="property-text">
         <TextContent textToRender={property} />
     </span>

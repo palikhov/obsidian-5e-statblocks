@@ -1,6 +1,6 @@
 <script lang="ts">
-    import type { Monster } from "@types";
-    import type { SavesItem } from "src/layouts/types";
+    import type { Monster } from "index";
+    import type { SavesItem } from "types/layout";
     import { toTitleCase } from "src/util/util";
     import { getContext } from "svelte";
     import TextContentHolder from "./TextContentHolder.svelte";
@@ -23,6 +23,8 @@
             let key = Object.keys(ability)[0];
             if (!key) return null;
             const value = Object.values(ability)[0];
+            if (typeof value == "string" && isNaN(Number(value)))
+                return `${toTitleCase(key)} ${value}`;
             if (!value || isNaN(Number(value))) return null;
             return `${toTitleCase(key)} ${getMod(value as number)}`;
         })
@@ -45,11 +47,12 @@
 
 <style>
     .line {
-        line-height: 1.4;
+        line-height: var(--active--saves-line-height);
         display: block;
-        color: var(--statblock-primary-color);
+        color: var(--active--font-color);
     }
     .property-name {
+        color: var(--active--property-name-font-color);
         margin: 0;
         margin-right: 0.25em;
         display: inline;

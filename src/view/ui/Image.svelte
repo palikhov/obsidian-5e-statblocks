@@ -1,17 +1,10 @@
 <script lang="ts">
-    import type { Monster } from "@types";
-    import type { ImageItem } from "src/layouts/types";
+    import type { Monster } from "index";
+    import type { ImageItem } from "types/layout";
     import type StatBlockPlugin from "src/main";
     import { getContext } from "svelte";
-    import {
-        App,
-        HoverPopover,
-        MarkdownPreviewView,
-        MarkdownView,
-        Platform,
-        TFile,
-        WorkspaceLeaf
-    } from "obsidian";
+    import { Platform, TFile } from "obsidian";
+    import { Linkifier } from "src/util/linkify";
 
     export let monster: Monster;
     export let item: ImageItem;
@@ -19,34 +12,33 @@
     const plugin = getContext<StatBlockPlugin>("plugin");
     const context = getContext<string>("context");
 
-    function parseLink(link: string) {
-        return link?.replace(/(\[|\])/g, "");
-    }
     let file: TFile;
-    async function getLink(url: string) {
+    function getLink(url: string) {
         url = decodeURIComponent(url);
         let link: string;
         try {
             if (/https?:/.test(url)) {
                 //url
-                const [linkpath] = parseLink(url).split("|");
+                const [linkpath] = Linkifier.stringifyLinks(url).split("|");
                 link = linkpath;
             } else {
-                const [linkpath] = parseLink(url).split("|");
+                const [linkpath] = Linkifier.stringifyLinks(url)
+                    .replace(/(^\[\[|\]\]$)/g, "")
+                    .split("|");
 
                 file = plugin.app.metadataCache.getFirstLinkpathDest(
-                    linkpath.replace(/<\/?STATBLOCK-LINK>/g, ""),
+                    linkpath,
                     context
                 );
                 if (!file) throw new Error();
                 link = plugin.app.vault.getResourcePath(file);
             }
         } catch (e) {
-            console.error(e);
+            console.warn("No image could be loaded");
         }
         return link;
     }
-    const getImage = async (): Promise<string> => {
+    const getImage = (): string => {
         if (
             item.properties.length &&
             item.properties.some(
@@ -58,7 +50,7 @@
             );
             if (props.length > 1) {
                 console.log(
-                    "TTRPG Statblocks: Multiple image properties provided, using first."
+                    "Fantasy Statblocks: Multiple image properties provided, using first."
                 );
             }
             const path = monster[props[0]] as string;
@@ -66,7 +58,7 @@
             return getLink(path);
         }
     };
-    let promise = getImage();
+    let image = getImage();
 
     const modifier = Platform.isMacOS ? "Meta" : "Control";
     function open(evt: MouseEvent) {
@@ -77,6 +69,7 @@
         leaf.openFile(file);
     }
     function popover(evt: MouseEvent & { currentTarget: HTMLDivElement }) {
+        if (!file) return;
         plugin.app.workspace.trigger(
             "link-hover",
             {},
@@ -87,27 +80,21 @@
     }
 </script>
 
-{#each item.properties as property}
-    {#if property in monster}
-        {#await promise then image}
-            {#if image}
-                <div
-                    class="image"
-                    class:pointer={file != null}
-                    on:click={(evt) => open(evt)}
-                    on:mouseenter={(evt) => popover(evt)}
-                >
-                    <img src={image} alt={monster.name} />
-                </div>
-            {/if}
-        {/await}
-    {/if}
-{/each}
+{#if image}
+    <div
+        class="image"
+        class:pointer={file != null}
+        on:click={(evt) => open(evt)}
+        on:mouseenter={(evt) => popover(evt)}
+    >
+        <img src={image} alt={monster.name} />
+    </div>
+{/if}
 
 <style>
     .image {
-        width: 75px;
-        height: 75px;
+        width: var(--active--image-width);
+        height: var(--active--image-height);
     }
     .image.pointer {
         cursor: pointer;
@@ -117,7 +104,8 @@
         width: 100%;
         height: 100%;
         border-radius: 100%;
-        border: 2px solid var(--statblock-primary-color);
+        border: var(--active--image-border-size) solid
+            var(--active--image-border-color);
         object-position: center;
     }
 </style>

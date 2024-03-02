@@ -24,6 +24,10 @@
     padding-bottom: 0;
 }
 
+.fantasy-statblocks-modal .copy-code-button,
+.statblock-edit-block .copy-code-button {
+    display: none;
+}
 .statblock-edit-block .setting-item {
     border: 0;
 
@@ -103,4 +107,98 @@
 }
 .statblock-settings .coffee img {
     height: 30px;
+}
+details.statblock-nested-settings > summary {
+    outline: none;
+    display: flex;
+    justify-content: space-between;
+    min-height: 1rem;
+    border-top-left-radius: 0.1rem;
+    border-top-right-radius: 0.1rem;
+    cursor: pointer;
+    position: relative;
+    margin-bottom: 1rem;
+}
+details.statblock-nested-settings > summary > .setting-item {
+    padding-bottom: 0;
+}
+.statblock-nested-settings .cm-editor {
+    margin-bottom: 1rem;
+}
+details.statblock-nested-settings > summary::-webkit-details-marker,
+details.statblock-nested-settings > summary::marker {
+    display: none !important;
+}
+details.statblock-nested-settings .summary-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+details.statblock-nested-settings[open] .summary-content {
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+details.statblock-nested-settings .summary-content .setting-item-heading {
+    padding: 0;
+}
+details.statblock-nested-settings > summary .collapser {
+    display: flex;
+    align-items: center;
+    content: "";
+}
+
+details.statblock-nested-settings > summary .collapser > .handle {
+    transform: rotate(0deg);
+    transition: transform 0.25s;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8.59 16.58L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.42z'/></svg>");
+    mask-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8.59 16.58L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.42z'/></svg>");
+    width: 20px;
+    height: 20px;
+}
+
+details[open].statblock-nested-settings > summary .collapser > .handle {
+    transform: rotate(90deg);
+}
+
+.statblock-nested-settings {
+    padding-bottom: 18px;
+}
+
+.statblock-nested-settings:not(details) .setting-item-heading {
+    border-top: 0px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.statblock-textarea + .cm-editor {
+    height: 200px;
+    margin-bottom: 1rem;
+}
+.statblock-textarea.statblock-textarea-small + .cm-editor {
+    height: 100px;
+    margin-bottom: 1rem;
+}
+.statblock-textarea.statblock-textarea-x-small + .cm-editor {
+    margin-bottom: 1rem;
+    height: unset;
+}
+.confirm-buttons-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.confirm-buttons-container .dont-ask {
+    cursor: pointer;
+}
+
+.confirm-buttons {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
 }

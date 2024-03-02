@@ -1,5 +1,6 @@
 import {
     App,
+    ButtonComponent,
     debounce,
     Modal,
     normalizePath,
@@ -7,25 +8,25 @@ import {
     PluginSettingTab,
     prepareSimpleSearch,
     Setting,
-    TextComponent,
     TFolder
 } from "obsidian";
 
 import type StatBlockPlugin from "src/main";
-import StatblockCreator from "./StatblockCreator.svelte";
-
-import { ViewMonsterModal } from "src/settings/suggester";
+import LayoutEditor from "./layout/LayoutEditor.svelte";
 
 import fastCopy from "fast-copy";
 
 import Importer from "src/importers/importer";
 import { FolderSuggestionModal } from "src/util/folder";
-import { EditMonsterModal } from "./modal";
-import { Layout5e } from "src/layouts/basic5e";
-import type { Layout } from "src/layouts/types";
+import { EditMonsterModal, ViewMonsterModal } from "./modal";
+import { Layout5e } from "src/layouts/basic 5e/basic5e";
+import type { DefaultLayout, Layout } from "types/layout";
 import { DefaultLayouts } from "src/layouts";
-import type { Monster } from "@types";
-import { stringify } from "src/util/util";
+import { nanoid, stringify } from "src/util/util";
+import { DICE_ROLLER_SOURCE } from "src/main";
+import type { Monster } from "index";
+import { ExpectedValue } from "obsidian-overload";
+import FantasyStatblockModal from "src/modal/modal";
 
 export default class StatblockSettingTab extends PluginSettingTab {
     importer: Importer;
@@ -44,10 +45,11 @@ export default class StatblockSettingTab extends PluginSettingTab {
 
             containerEl.addClass("statblock-settings");
 
-            containerEl.createEl("h2", { text: "TTRPG Statblock Settings" });
+            containerEl.createEl("h2", { text: "Fantasy Statblocks Settings" });
 
             this.generateTopSettings(containerEl.createDiv());
             this.generateParseSettings(containerEl.createDiv());
+            this.generateAdvancedSettings(containerEl.createDiv());
 
             this.generateLayouts(containerEl.createDiv());
 
@@ -70,11 +72,37 @@ export default class StatblockSettingTab extends PluginSettingTab {
             );
         }
     }
+    generateAdvancedSettings(container: HTMLDivElement) {
+        container.empty();
+        new Setting(container).setHeading().setName("Advanced Settings");
+
+        new Setting(container)
+            .setName("Try to Save Data Atomically")
+            .setDesc(
+                createFragment((e) => {
+                    e.createSpan({
+                        text: "This will cause to plugin to save data to a temporary file before saving the actual data file in an attempt to prevent data loss."
+                    });
+                    e.createEl("br");
+                    e.createSpan({
+                        text: "This can cause issues sometimes when using sync services."
+                    });
+                })
+            )
+            .addToggle((t) =>
+                t
+                    .setValue(this.plugin.settings.atomicWrite)
+                    .onChange(async (v) => {
+                        this.plugin.settings.atomicWrite = v;
+                        await this.plugin.saveSettings();
+                    })
+            );
+    }
 
     generateTopSettings(container: HTMLDivElement) {
         container.empty();
         new Setting(container).setHeading().setName("General Settings");
-        new Setting(container)
+        /* new Setting(container)
             .setName("Enable Export to PNG")
             .setDesc(
                 createFragment((e) => {
@@ -87,18 +115,18 @@ export default class StatblockSettingTab extends PluginSettingTab {
                     });
                 })
             )
-            .setDisabled(!this.plugin.canUseDiceRoller)
+            .setDisabled(!this.plugin.diceRollerInstalled)
             .addToggle((t) =>
                 t.setValue(this.plugin.settings.useDice).onChange(async (v) => {
                     this.plugin.settings.useDice = v;
                     await this.plugin.saveSettings();
                 })
-            );
+            ); */
         new Setting(container)
             .setName("Integrate Dice Roller")
             .setDesc(
                 createFragment((e) => {
-                    if (this.plugin.canUseDiceRoller) {
+                    if (this.plugin.diceRollerInstalled) {
                         e.createSpan({
                             text: "Add Dice Roller dice to statblocks by default. Use "
                         });
@@ -113,7 +141,7 @@ export default class StatblockSettingTab extends PluginSettingTab {
                     }
                 })
             )
-            .setDisabled(!this.plugin.canUseDiceRoller)
+            .setDisabled(!this.plugin.diceRollerInstalled)
             .addToggle((t) =>
                 t.setValue(this.plugin.settings.useDice).onChange(async (v) => {
                     this.plugin.settings.useDice = v;
@@ -124,7 +152,7 @@ export default class StatblockSettingTab extends PluginSettingTab {
             .setName("Render Dice Rolls")
             .setDesc(
                 createFragment((e) => {
-                    if (this.plugin.canUseDiceRoller) {
+                    if (this.plugin.diceRollerInstalled) {
                         e.createSpan({
                             text: "Roll graphical dice inside statblocks by default. Use "
                         });
@@ -139,12 +167,25 @@ export default class StatblockSettingTab extends PluginSettingTab {
                     }
                 })
             )
-            .setDisabled(!this.plugin.canUseDiceRoller)
+            .setDisabled(!this.plugin.diceRollerInstalled)
             .addToggle((t) =>
                 t
                     .setValue(this.plugin.settings.renderDice)
                     .onChange(async (v) => {
                         this.plugin.settings.renderDice = v;
+                        if (this.plugin.diceRollerInstalled) {
+                            this.app.plugins
+                                .getPlugin("obsidian-dice-roller")
+                                ?.api.registerSource(DICE_ROLLER_SOURCE, {
+                                    showDice: true,
+                                    shouldRender:
+                                        this.plugin.settings.renderDice,
+                                    showFormula: false,
+                                    showParens: false,
+                                    expectedValue: ExpectedValue.Average,
+                                    text: null
+                                });
+                        }
                         await this.plugin.saveSettings();
                     })
             );
@@ -305,9 +346,9 @@ export default class StatblockSettingTab extends PluginSettingTab {
             .appendChild(
                 createFragment((el) => {
                     el.createSpan({
-                        text: "New statblock layouts can be created and managed here. A specific statblock can be used for a creature using the "
+                        text: "New statblock layouts can be created and managed here. A specific layout can be used for a creature using the "
                     });
-                    el.createEl("code", { text: "statblock" });
+                    el.createEl("code", { text: "layout" });
                     el.createSpan({ text: " parameter." });
                 })
             );
@@ -332,9 +373,9 @@ export default class StatblockSettingTab extends PluginSettingTab {
                     await new Promise<void>((resolve, reject) => {
                         const reader = new FileReader();
 
-                        reader.onload = (event) => {
+                        reader.onload = async (event) => {
                             try {
-                                const layout = JSON.parse(
+                                const layout: Layout = JSON.parse(
                                     event.target.result as string
                                 );
                                 if (!layout) {
@@ -351,6 +392,9 @@ export default class StatblockSettingTab extends PluginSettingTab {
                                     );
                                     return;
                                 }
+                                if (!layout?.id) {
+                                    layout.id = nanoid();
+                                }
                                 if (!layout?.blocks) {
                                     reject(
                                         new Error(
@@ -358,6 +402,18 @@ export default class StatblockSettingTab extends PluginSettingTab {
                                         )
                                     );
                                     return;
+                                }
+                                if (!layout.diceParsing) {
+                                    layout.diceParsing = [];
+                                }
+                                if (
+                                    !this.plugin.settings.alwaysImport &&
+                                    layout.blocks.find(
+                                        (b) => b.type == "javascript"
+                                    ) &&
+                                    !(await confirm(this.plugin))
+                                ) {
+                                    resolve();
                                 }
                                 this.plugin.settings.layouts.push(
                                     this.getDuplicate(layout)
@@ -376,7 +432,8 @@ export default class StatblockSettingTab extends PluginSettingTab {
                     });
                 }
                 await this.plugin.saveSettings();
-                this.buildCustomLayouts(layoutContainer);
+                inputFile.value = null;
+                this.buildCustomLayouts(layoutContainer, containerEl);
             } catch (e) {}
         };
 
@@ -391,7 +448,7 @@ export default class StatblockSettingTab extends PluginSettingTab {
             .addButton((b) =>
                 b
                     .setIcon("plus-with-circle")
-                    .setTooltip("Add New Statblock")
+                    .setTooltip("Add New Layout")
                     .onClick(() => {
                         const modal = new CreateStatblockModal(this.plugin);
                         modal.onClose = async () => {
@@ -400,7 +457,10 @@ export default class StatblockSettingTab extends PluginSettingTab {
                                 this.getDuplicate(modal.layout)
                             );
                             await this.plugin.saveSettings();
-                            this.buildCustomLayouts(layoutContainer);
+                            this.buildCustomLayouts(
+                                layoutContainer,
+                                containerEl
+                            );
                         };
                         modal.open();
                     })
@@ -414,24 +474,21 @@ export default class StatblockSettingTab extends PluginSettingTab {
                 "Change the default statblock layout used, if not specified."
             )
             .addDropdown(async (d) => {
-                for (const layout of DefaultLayouts) {
-                    d.addOption(layout.name, layout.name);
-                }
-                for (const layout of this.plugin.settings.layouts) {
-                    d.addOption(layout.name, layout.name);
+                for (const layout of this.plugin.layouts) {
+                    d.addOption(layout.id, layout.name);
                 }
 
                 if (
                     !this.plugin.settings.default ||
-                    !this.plugin.settings.layouts.find(
-                        ({ name }) => name == this.plugin.settings.default
+                    !this.plugin.layouts.find(
+                        ({ id }) => id == this.plugin.settings.default
                     )
                 ) {
-                    this.plugin.settings.default = Layout5e.name;
+                    this.plugin.settings.default = Layout5e.id;
                     await this.plugin.saveSettings();
                 }
 
-                d.setValue(this.plugin.settings.default ?? Layout5e.name);
+                d.setValue(this.plugin.settings.default ?? Layout5e.id);
 
                 d.onChange(async (v) => {
                     this.plugin.settings.default = v;
@@ -453,20 +510,14 @@ export default class StatblockSettingTab extends PluginSettingTab {
         const layoutContainer =
             statblockCreatorContainer.createDiv("additional");
 
-        this.buildCustomLayouts(layoutContainer);
+        this.buildCustomLayouts(layoutContainer, containerEl);
     }
     getDuplicate(layout: Layout) {
-        if (
-            !this.plugin.settings.layouts.find((l) => l.name == layout.name) &&
-            layout.name != Layout5e.name
-        )
+        if (!this.plugin.layouts.find((l) => l.name == layout.name))
             return layout;
-        const names = [
-            Layout5e.name,
-            ...this.plugin.settings.layouts
-                .filter((l) => l.name.contains(`${layout.name} Copy`))
-                .map((l) => l.name)
-        ];
+        const names = this.plugin.layouts
+            .filter((l) => l.name.contains(`${layout.name} Copy`))
+            .map((l) => l.name);
 
         let temp = `${layout.name} Copy`;
 
@@ -478,30 +529,34 @@ export default class StatblockSettingTab extends PluginSettingTab {
         }
         return {
             blocks: fastCopy(layout.blocks),
-            name: name
+            name,
+            id: nanoid()
         };
     }
-    buildCustomLayouts(layoutContainer: HTMLDivElement) {
+    buildCustomLayouts(
+        layoutContainer: HTMLDivElement,
+        outerContainer: HTMLDivElement
+    ) {
         layoutContainer.empty();
 
-        for (const layout of DefaultLayouts) {
+        if (this.plugin.settings.defaultLayouts.some((f) => f.removed)) {
             new Setting(layoutContainer)
-                .setName(layout.name)
-                .addExtraButton((b) => {
-                    b.setIcon("duplicate-glyph")
-                        .setTooltip("Create Copy")
-                        .onClick(async () => {
-                            this.plugin.settings.layouts.push(
-                                this.getDuplicate(layout)
-                            );
-                            await this.plugin.saveSettings();
-                            this.buildCustomLayouts(layoutContainer);
-                        });
+                .setName("Restore Default Layouts")
+                .addButton((b) => {
+                    b.setIcon("rotate-ccw").onClick(async () => {
+                        for (const layout of this.plugin.settings
+                            .defaultLayouts) {
+                            delete layout.removed;
+                        }
+                        await this.plugin.saveSettings();
+                        this.generateLayouts(outerContainer);
+                    });
                 });
         }
+        for (const layout of this.plugin.settings.defaultLayouts) {
+            if (layout.removed) continue;
 
-        for (const layout of this.plugin.settings.layouts) {
-            new Setting(layoutContainer)
+            const setting = new Setting(layoutContainer)
                 .setName(layout.name)
                 .addExtraButton((b) => {
                     b.setIcon("pencil")
@@ -513,28 +568,61 @@ export default class StatblockSettingTab extends PluginSettingTab {
                             );
                             modal.onClose = async () => {
                                 if (!modal.saved) return;
-                                this.plugin.settings.layouts.splice(
-                                    this.plugin.settings.layouts.indexOf(
+
+                                (modal.layout as DefaultLayout).edited = true;
+                                this.plugin.settings.defaultLayouts.splice(
+                                    this.plugin.settings.defaultLayouts.indexOf(
                                         layout
                                     ),
                                     1,
                                     modal.layout
                                 );
+
                                 await this.plugin.saveSettings();
-                                this.buildCustomLayouts(layoutContainer);
+                                this.plugin.manager.updateDefaultLayout(
+                                    layout.id,
+                                    modal.layout
+                                );
+                                this.generateLayouts(outerContainer);
                             };
                             modal.open();
                         });
-                })
+                });
+            if (layout.edited) {
+                setting.addExtraButton((b) =>
+                    b.setIcon("undo").onClick(async () => {
+                        const defLayout = DefaultLayouts.find(
+                            ({ id }) => id == layout.id
+                        );
+                        this.plugin.settings.defaultLayouts.splice(
+                            this.plugin.settings.defaultLayouts.indexOf(layout),
+                            1,
+                            fastCopy(defLayout)
+                        );
+                        await this.plugin.saveSettings();
+                        this.plugin.manager.updateDefaultLayout(
+                            layout.id,
+                            defLayout
+                        );
+                        this.generateLayouts(outerContainer);
+                    })
+                );
+            }
+
+            setting
                 .addExtraButton((b) => {
                     b.setIcon("duplicate-glyph")
                         .setTooltip("Create Copy")
                         .onClick(async () => {
-                            this.plugin.settings.layouts.push(
-                                this.getDuplicate(layout)
-                            );
+                            const dupe = this.getDuplicate(layout);
+                            this.plugin.settings.layouts.push(dupe);
                             await this.plugin.saveSettings();
-                            this.buildCustomLayouts(layoutContainer);
+                            this.plugin.manager.addLayout(dupe);
+
+                            this.buildCustomLayouts(
+                                layoutContainer,
+                                outerContainer
+                            );
                         });
                 })
                 .addExtraButton((b) => {
@@ -552,18 +640,96 @@ export default class StatblockSettingTab extends PluginSettingTab {
                             URL.revokeObjectURL(url);
                         });
                 })
+                .addExtraButton((b) => {
+                    b.setIcon("trash")
+                        .setTooltip("Delete")
+                        .onClick(async () => {
+                            layout.removed = true;
+                            await this.plugin.saveSettings();
+                            this.generateLayouts(outerContainer);
+                        });
+                });
+        }
+        for (const layout of this.plugin.settings.layouts) {
+            new Setting(layoutContainer)
+                .setName(layout.name)
+                .addExtraButton((b) => {
+                    b.setIcon("pencil")
+                        .setTooltip("Edit")
+                        .onClick(() => {
+                            const modal = new CreateStatblockModal(
+                                this.plugin,
+                                layout
+                            );
+                            modal.onClose = async () => {
+                                if (!modal.saved) return;
+                                if (
+                                    DefaultLayouts.find(
+                                        ({ id }) => id == layout.id
+                                    )
+                                ) {
+                                    (modal.layout as DefaultLayout).edited =
+                                        true;
+                                }
+                                this.plugin.settings.layouts.splice(
+                                    this.plugin.settings.layouts.indexOf(
+                                        layout
+                                    ),
+                                    1,
+                                    modal.layout
+                                );
 
+                                await this.plugin.saveSettings();
+                                this.plugin.manager.updateLayout(
+                                    layout.id,
+                                    modal.layout
+                                );
+                                this.generateLayouts(outerContainer);
+                            };
+                            modal.open();
+                        });
+                })
+                .addExtraButton((b) => {
+                    b.setIcon("duplicate-glyph")
+                        .setTooltip("Create Copy")
+                        .onClick(async () => {
+                            const dupe = this.getDuplicate(layout);
+                            this.plugin.settings.layouts.push(dupe);
+                            await this.plugin.saveSettings();
+                            this.plugin.manager.addLayout(dupe);
+                            this.buildCustomLayouts(
+                                layoutContainer,
+                                outerContainer
+                            );
+                        });
+                })
+                .addExtraButton((b) => {
+                    b.setIcon("import-glyph")
+                        .setTooltip("Export as JSON")
+                        .onClick(() => {
+                            const link = createEl("a");
+                            const file = new Blob([JSON.stringify(layout)], {
+                                type: "json"
+                            });
+                            const url = URL.createObjectURL(file);
+                            link.href = url;
+                            link.download = `${layout.name}.json`;
+                            link.click();
+                            URL.revokeObjectURL(url);
+                        });
+                })
                 .addExtraButton((b) => {
                     b.setIcon("trash")
                         .setTooltip("Delete")
                         .onClick(async () => {
                             this.plugin.settings.layouts =
                                 this.plugin.settings.layouts.filter(
-                                    (l) => l.name !== layout.name
+                                    (l) => l.id !== layout.id
                                 );
                             await this.plugin.saveSettings();
+                            this.plugin.manager.removeLayout(layout.id);
 
-                            this.buildCustomLayouts(layoutContainer);
+                            this.generateLayouts(outerContainer);
                         });
                 });
         }
@@ -747,6 +913,42 @@ export default class StatblockSettingTab extends PluginSettingTab {
             b.buttonEl.appendChild(inputTetra);
             b.onClick(() => inputTetra.click());
         });
+        const importGeneric = new Setting(importAdditional)
+            .setName("Import Generic Data")
+            .setDesc(
+                createFragment((e) => {
+                    e.createSpan({
+                        text: "Import generic JSON files. JSON objects will be imported "
+                    });
+                    e.createEl("strong", { text: "as-is" });
+                    e.createSpan({ text: " and all objects must have the " });
+                    e.createEl("code", { text: "name" });
+                    e.createSpan({ text: " property." });
+                })
+            );
+        const inputGeneric = createEl("input", {
+            attr: {
+                type: "file",
+                name: "generic",
+                accept: ".json, .monster",
+                multiple: true
+            }
+        });
+        inputGeneric.onchange = async () => {
+            const { files } = inputGeneric;
+            if (!files.length) return;
+            const monsters = await this.importer.import(files, "generic");
+            if (monsters && monsters.length) {
+                await this.plugin.saveMonsters(monsters);
+            }
+            this.display();
+        };
+        importGeneric.addButton((b) => {
+            b.setButtonText("Choose File(s)").setTooltip("Import Generic Data");
+            b.buttonEl.addClass("statblock-file-upload");
+            b.buttonEl.appendChild(inputGeneric);
+            b.onClick(() => inputGeneric.click());
+        });
     }
     generateMonsters(containerEl: HTMLDivElement) {
         containerEl.empty();
@@ -791,7 +993,7 @@ export default class StatblockSettingTab extends PluginSettingTab {
                     .onClick(() => {
                         const modal = new ConfirmModal(
                             this.results.length,
-                            this.plugin.app
+                            this.plugin
                         );
                         modal.onClose = async () => {
                             if (modal.saved) {
@@ -962,19 +1164,23 @@ export default class StatblockSettingTab extends PluginSettingTab {
     }
 }
 
-class CreateStatblockModal extends Modal {
-    creator: StatblockCreator;
+class CreateStatblockModal extends FantasyStatblockModal {
+    creator: LayoutEditor;
     layout: Layout;
     saved: boolean = false;
     constructor(
         public plugin: StatBlockPlugin,
         layout: Layout = {
             name: "Layout",
-            blocks: []
+            blocks: [],
+            diceParsing: [],
+            id: nanoid()
         }
     ) {
-        super(plugin.app);
+        super(plugin);
         this.layout = fastCopy(layout);
+        this.modalEl.addClasses(["mod-sidebar-layout", "mod-settings"]);
+        this.contentEl.addClass("vertical-tabs-container");
     }
 
     onOpen() {
@@ -983,7 +1189,7 @@ class CreateStatblockModal extends Modal {
 
     display() {
         this.titleEl.createSpan({ text: "Create Layout" });
-        this.creator = new StatblockCreator({
+        this.creator = new LayoutEditor({
             target: this.contentEl,
             props: {
                 layout: this.layout,
@@ -1001,10 +1207,10 @@ class CreateStatblockModal extends Modal {
     }
 }
 
-class ConfirmModal extends Modal {
+class ConfirmModal extends FantasyStatblockModal {
     saved: boolean = false;
-    constructor(public filtered: number, app: App) {
-        super(app);
+    constructor(public filtered: number, plugin: StatBlockPlugin) {
+        super(plugin);
     }
     onOpen() {
         this.titleEl.setText("Are you sure?");
@@ -1023,9 +1229,67 @@ class ConfirmModal extends Modal {
             })
             .addExtraButton((b) =>
                 b.setIcon("cross").onClick(() => {
-                    this.saved = true;
                     this.close();
                 })
             );
+    }
+}
+async function confirm(plugin: StatBlockPlugin): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        try {
+            const modal = new ConfirmImport(plugin);
+            modal.onClose = () => {
+                resolve(modal.confirmed);
+            };
+            modal.open();
+        } catch (e) {
+            reject();
+        }
+    });
+}
+class ConfirmImport extends FantasyStatblockModal {
+    confirmed: boolean = false;
+    constructor(public plugin: StatBlockPlugin) {
+        super(plugin);
+    }
+    async display() {
+        this.contentEl.empty();
+        this.contentEl.addClass("confirm-modal");
+        this.contentEl.createEl("p", {
+            text: "This Layout includes JavaScript blocks. JavaScript blocks can execute code in your vault, which could cause loss or corruption of data."
+        });
+        this.contentEl.createEl("p", {
+            text: "Are you sure you want to import this layout?"
+        });
+
+        const buttonContainerEl = this.contentEl.createDiv(
+            "confirm-buttons-container"
+        );
+        buttonContainerEl.createEl("a").createEl("small", {
+            cls: "dont-ask",
+            text: "Import and don't ask again"
+        }).onclick = async () => {
+            this.confirmed = true;
+            this.plugin.settings.alwaysImport = true;
+            this.close();
+        };
+
+        const buttonEl = buttonContainerEl.createDiv("confirm-buttons");
+        new ButtonComponent(buttonEl)
+            .setButtonText("Import")
+            .setCta()
+            .onClick(() => {
+                this.confirmed = true;
+                this.close();
+            });
+        buttonEl.createEl("a").createEl("small", {
+            cls: "dont-ask",
+            text: "Cancel"
+        }).onclick = () => {
+            this.close();
+        };
+    }
+    onOpen() {
+        this.display();
     }
 }

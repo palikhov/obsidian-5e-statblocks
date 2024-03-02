@@ -1,4 +1,4 @@
-import type { Monster } from "@types";
+import type { Monster } from "types";
 import { stringify } from "src/util/util";
 import type {
     ConditionImmunityArray,
@@ -72,7 +72,7 @@ export async function build5eMonsterFromFile(file: File): Promise<Monster[]> {
                             name: monster.name,
                             source: getSource(monster),
                             type: getType(monster.type),
-                            subtype: "",
+                            subtype: getSubType(monster.type),
                             size: SIZE_ABV_TO_FULL[monster.size?.[0]],
                             alignment: getMonsterAlignment(monster),
                             hp:
@@ -142,6 +142,19 @@ export async function build5eMonsterFromFile(file: File): Promise<Monster[]> {
                             legendary_actions:
                                 monster.legendary?.flatMap(normalizeEntries) ??
                                 [],
+                            mythic_actions: [
+                                ...((monster.mythicHeader
+                                    ? [
+                                          {
+                                              name: "",
+                                              entries: monster.mythicHeader
+                                          }
+                                      ]
+                                    : []
+                                ).flatMap(normalizeEntries) ?? []),
+                                ...(monster.mythic?.flatMap(normalizeEntries) ??
+                                    [])
+                            ],
                             spells: getSpells(monster),
                             spellsNotes: getSpellNotes(monster).join(" ")
                         };
@@ -170,6 +183,26 @@ function getType(type: Creature5eTools["type"]) {
     }
     return type.type;
 }
+
+function getSubType(type: Creature5eTools["type"]) {
+    if (!type) return;
+    if (typeof type == "string") {
+        return;
+    }
+    if (!type.tags) {
+        return;
+    }
+    let result: string[] = [];
+    for (var t of type.tags) {
+        if (typeof t == "string") {
+            result.push(t);
+        } else {
+            result.push(t.tag);
+        }
+    }
+    return result.join(", ");
+}
+
 function getCR(type: Creature5eTools["cr"]) {
     if (!type) return;
     if (typeof type == "string") {
@@ -382,8 +415,16 @@ function getAlignmentString(alignment: Align[] | Align | Alignment): string {
     if (!alignment) return null; // used in sidekicks
     let alignments: string[] = [];
     if (Array.isArray(alignment)) {
+        let alignStr: string[] = [];
         for (const align of alignment) {
-            alignments.push(getAlignmentString(align));
+            if (typeof align === "string") {
+                alignStr.push(getAlignmentString(align));
+            } else {
+                alignments.push(getAlignmentString(align));
+            }
+        }
+        if (alignStr.length > 0) {
+            alignments.push(alignStr.join(" "));
         }
     } else if (typeof alignment === "object") {
         if ("special" in alignment && alignment.special != null) {
@@ -486,7 +527,10 @@ function getSpeedString(monster: Creature5eTools): string {
 
 function getSenses(monster: Creature5eTools): string {
     if (typeof monster.senses == "string") return monster.senses;
-    const senses = [monster.senses?.join(", ").trim() ?? ""];
+    let senses: string[] = [];
+    if (Array.isArray(monster.senses) && monster.senses.length > 0) {
+        senses = [monster.senses.join(", ").trim()];
+    }
     if (monster.passive) {
         senses.push(`passive Perception ${monster.passive}`);
     }

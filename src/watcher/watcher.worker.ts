@@ -1,7 +1,14 @@
-import type { Monster } from "@types";
+import type { Monster } from "index";
 import copy from "fast-copy";
 import type { CachedMetadata } from "obsidian";
 import { transformTraits } from "src/util/util";
+import YAML from "yaml";
+
+interface FileDetails {
+    path: string;
+    basename: string;
+    mtime: number;
+}
 
 export interface DebugMessage {
     type: "debug";
@@ -16,7 +23,7 @@ export interface FileCacheMessage {
     type: "file";
     path: string;
     cache: CachedMetadata;
-    file: { path: string; basename: string; mtime: number };
+    file: FileDetails;
 }
 export interface GetFileCacheMessage {
     type: "get";
@@ -34,10 +41,23 @@ export interface UpdateEventMessage {
 export interface SaveMessage {
     type: "save";
 }
+export interface ReadMessage {
+    type: "read";
+    path: string;
+}
+export interface ContentMessage {
+    type: "content";
+    path: string;
+    content: string;
+}
 
 const ctx: Worker = self as any;
 class Parser {
     queue: string[] = [];
+    pendingContentProcessing: Map<string, FileDetails> = new Map<
+        string,
+        FileDetails
+    >();
     parsing: boolean = false;
     debug: boolean;
 
@@ -49,7 +69,7 @@ class Parser {
 
                 if (this.debug) {
                     console.debug(
-                        `TTRPG: Received queue message for ${event.data.paths.length} paths`
+                        `Fantasy Statblocks: Received queue message for ${event.data.paths.length} paths`
                     );
                 }
             }
@@ -59,29 +79,82 @@ class Parser {
                 this.debug = event.data.debug;
             }
         });
+        ctx.addEventListener(
+            "message",
+            (event: MessageEvent<ContentMessage>) => {
+                if (event.data.type == "content") {
+                    this.processContent(event.data.path, event.data.content);
+                }
+            }
+        );
     }
     add(...paths: string[]) {
         if (this.debug) {
-            console.debug(`TTRPG: Adding ${paths.length} paths to queue`);
+            console.debug(
+                `Fantasy Statblocks: Adding ${paths.length} paths to queue`
+            );
         }
         this.queue.push(...paths);
         if (!this.parsing) this.parse();
+    }
+    processContent(path: string, content: string) {
+        if (this.debug)
+            console.debug(`Fantasy Statblocks: Process Content: ${path}`);
+        let fileDetails = this.pendingContentProcessing.get(path);
+        let statBlock = this.findFirstStatBlock(content);
+        if (statBlock) {
+            if (this.debug)
+                console.debug(
+                    `Fantasy Statblocks: found Statblock: ${JSON.stringify(
+                        statBlock
+                    )}`
+                );
+            const monster: Monster = Object.assign({}, YAML.parse(statBlock), {
+                note: path,
+                mtime: fileDetails.mtime
+            });
+            if (this.debug)
+                console.debug(`Fantasy Statblocks: ${JSON.stringify(monster)}`);
+            this.processMonster(monster, fileDetails);
+        }
+
+        this.pendingContentProcessing.delete(path);
+        this.checkForWorkComplete();
+    }
+
+    findFirstStatBlock(content: string): string {
+        let matches = content.match(
+            /^```[^\S\r\n]*statblock\s?\n([\s\S]+?)^```/m
+        );
+        if (matches) {
+            return matches[1];
+        }
+        return null;
     }
     async parse() {
         this.parsing = true;
         while (this.queue.length) {
             const path = this.queue.shift();
+            if (!path.endsWith(".md")) {
+                continue;
+            }
             if (this.debug) {
                 console.debug(
-                    `TTRPG: Parsing ${path} for statblocks (${this.queue.length} to go)`
+                    `Fantasy Statblocks: Parsing ${path} for statblocks (${this.queue.length} to go)`
                 );
             }
             const { file, cache } = await this.getFileData(path);
             this.parseFileForCreatures(file, cache);
             ctx.postMessage<FinishFileMessage>({ type: "done", path });
         }
-        this.parsing = false;
-        ctx.postMessage<SaveMessage>({ type: "save" });
+        this.checkForWorkComplete();
+    }
+
+    private checkForWorkComplete() {
+        if (this.pendingContentProcessing.size == 0) {
+            this.parsing = false;
+            ctx.postMessage<SaveMessage>({ type: "save" });
+        }
     }
     async getFileData(path: string): Promise<FileCacheMessage> {
         return new Promise((resolve) => {
@@ -96,22 +169,33 @@ class Parser {
             ctx.postMessage<GetFileCacheMessage>({ path, type: "get" });
         });
     }
-    parseFileForCreatures(
-        file: { path: string; basename: string; mtime: number },
-        cache: CachedMetadata
-    ) {
+    parseFileForCreatures(file: FileDetails, cache: CachedMetadata) {
         if (!cache) return;
         if (!cache.frontmatter) return;
         if (!cache.frontmatter.statblock) return;
+        if (cache.frontmatter.statblock === "inline") {
+            ctx.postMessage<ReadMessage>({
+                type: "read",
+                path: file.path
+            });
+            this.pendingContentProcessing.set(file.path, file);
+            return;
+        }
         if (!cache.frontmatter.name) return;
-        const monster: Monster = Object.assign({}, copy(cache.frontmatter), {
-            note: file.path,
-            mtime: file.mtime
-        });
+        const monster: Monster = this.validate(
+            Object.assign({}, copy(cache.frontmatter), {
+                note: file.path,
+                mtime: file.mtime
+            })
+        );
 
         if (monster.traits) {
             monster.traits = transformTraits([], monster.traits);
         }
+        this.processMonster(monster, file);
+    }
+
+    private processMonster(monster: Monster, file: FileDetails) {
         if (monster.actions) {
             monster.actions = transformTraits([], monster.actions);
         }
@@ -127,10 +211,18 @@ class Parser {
                 monster.legendary_actions
             );
         }
+        if (
+            monster["statblock-link"] &&
+            monster["statblock-link"].startsWith("#")
+        ) {
+            monster[
+                "statblock-link"
+            ] = `[${monster.name}](${file.path}${monster["statblock-link"]})`;
+        }
 
         if (this.debug)
             console.debug(
-                `TTRPG: Adding ${monster.name} to bestiary from ${file.basename}`
+                `Fantasy Statblocks: Adding ${monster.name} to bestiary from ${file.basename}`
             );
 
         ctx.postMessage<UpdateEventMessage>({
@@ -138,6 +230,9 @@ class Parser {
             monster,
             path: file.path
         });
+    }
+    validate(draft: Partial<Monster>): Monster {
+        return draft as Monster;
     }
 }
 new Parser();

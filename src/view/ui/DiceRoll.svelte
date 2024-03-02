@@ -45,7 +45,7 @@
                         a +
                         (dice.static
                             ? dice.result
-                            : Math.ceil(
+                            : Math.floor(
                                   ((dice.faces.min + dice.faces.max) / 2) *
                                       dice.rolls
                               )),
@@ -86,6 +86,6 @@
 
 <style>
     .roller-result {
-        font-weight: 700;
+        font-weight: var(--active--font-weight);
     }
 </style>
